@@ -1,0 +1,15 @@
+# DOKUMENTASI PROYEK FLOW METER
+
+## Deskripsi Proyek
+Proyek ini adalah sistem flow meter berbasis ESP32 yang dapat mengukur laju aliran, tekanan diferensial, suhu, dan kelembaban. Sistem ini mendukung konektivitas MQTT untuk komunikasi data dan memiliki kemampuan penyimpanan data offline.
+
+## Fitur Utama
+- Pengukuran laju aliran (flow rate)
+- Pengukuran tekanan diferensial (delta P)
+- Pengukuran suhu dan kelembaban
+- Konektivitas MQTT untuk pengiriman data
+- Penyimpanan data offline
+- Antarmuka web untuk konfigurasi
+- Tampilan OLED untuk monitoring
+
+## Struktur Proyek

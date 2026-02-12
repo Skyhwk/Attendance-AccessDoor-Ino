@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Home</title>
+    <link rel="stylesheet" href="/portal.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="h1">Home</div>
+        <div class="row">
+          <div class="label">Device ID</div>
+          <div id="deviceId">-</div>
+        </div>
+        <div class="row">
+          <div class="label">IP</div>
+          <div id="ip">-</div>
+        </div>
+        <div class="row">
+          <div class="label">Status</div>
+          <div id="online">-</div>
+        </div>
+      </div>
+
+      <a class="btn btnP" href="/setting">Setting</a>
+      <a class="btn" href="/download/log">Download Log</a>
+      <a class="btn" href="/download/akses">Download Akses</a>
+      <a class="btn" href="/reset">Reset</a>
+      <button class="btn" onclick="Portal.logout()">Logout</button>
+    </div>
+    <script src="/portal.js"></script>
+    <script>Portal.homeInit();</script>
+  </body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Setting</title>
+    <link rel="stylesheet" href="/portal.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="h1">Setting</div>
+        <div id="msg" class="small"></div>
+        <form id="f">
+          <div style="margin:10px 0">
+            <div class="label">SSID</div><input name="ssid" />
+          </div>
+          <div style="margin:10px 0">
+            <div class="label">Password</div><input name="password" type="password" />
+          </div>
+          <div style="margin:10px 0">
+            <div class="label">DHCP</div>
+            <select name="dhcp">
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
+          </div>
+          <div id="staticFields">
+            <div style="margin:10px 0">
+              <div class="label">IP</div><input name="ip" />
+            </div>
+            <div style="margin:10px 0">
+              <div class="label">Gateway</div><input name="gateway" />
+            </div>
+            <div style="margin:10px 0">
+              <div class="label">Subnet</div><input name="subnet" />
+            </div>
+          </div>
+          <hr />
+          <div style="margin:10px 0">
+            <div class="label">Host</div><input name="host" />
+          </div>
+          <div style="margin:10px 0">
+            <div class="label">Port</div><input name="port" />
+          </div>
+          <div style="margin:10px 0">
+            <div class="label">Topic Subscribe</div><input name="topic_subscribe" />
+          </div>
+          <div style="margin:10px 0">
+            <div class="label">Topic Publish</div><input name="topic_publish" />
+          </div>
+          <hr />
+          <div style="margin:10px 0">
+            <div class="label">Device ID</div><input name="iddev" />
+          </div>
+          <div style="margin:10px 0">
+            <div class="label">Offset Day</div><input name="offsetday" />
+          </div>
+          <div style="margin:10px 0">
+            <div class="label">Mode Device Data</div>
+            <select name="modeDeviceData">
+              <option value="0">Akses Pintu</option>
+              <option value="1">Absensi</option>
+            </select>
+          </div>
+
+          <button class="btn btnP" type="submit">Simpan (Restart)</button>
+        </form>
+        <a class="btn" href="/home">Kembali</a>
+      </div>
+    </div>
+    <script src="/portal.js"></script>
+    <script>
+      Portal.settingInit();
+      document.getElementById('f').addEventListener('submit', Portal.settingSubmit);
+    </script>
+  </body>
+</html>
