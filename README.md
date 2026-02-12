@@ -50,7 +50,7 @@ Firmware menggunakan **ESP32 DevKit v1** + Arduino framework (PlatformIO).
 ## 3) Clone project
 
 ```bash
-git clone <URL-REPO-ANDA>
+git clone https://github.com/Skyhwk/Attendance-AccessDoor-Ino.git
 ```
 
 Buka folder project ini dari VS Code (PlatformIO).
