@@ -86,6 +86,7 @@ void WifiManager::handle()
         if (!_wasConnected)
         {
             _justConnected = true;
+            LCD.setInfo1("");
             LCD.showTemp("Wifi", "Connected", 3000, true);
         }
 

@@ -50,7 +50,12 @@ void MQTTManager::publishLog(String payload)
         return;
 
     auto &cfg = Config.get();
-    String topic = "device/" + String(cfg.iddev) + "/log";
+    String topic = cfg.topic_publish;
+    if (topic.isEmpty())
+    {
+        Serial.println("[MQTT] topic_publish empty");
+        return;
+    }
     client.publish(topic.c_str(), payload.c_str());
 }
 
@@ -116,7 +121,7 @@ bool MQTTManager::connectIfNeeded()
 
     if (!wifiConfigValid())
     {
-        Serial.println("[MQTT] Skip connect: ssid/password empty");
+        // Serial.println("[MQTT] Skip connect: ssid/password empty");
         if (client.connected())
             client.disconnect();
         return false;
@@ -124,7 +129,7 @@ bool MQTTManager::connectIfNeeded()
 
     if (!networkReady())
     {
-        Serial.println("[MQTT] Skip connect: WiFi not connected");
+        // Serial.println("[MQTT] Skip connect: WiFi not connected");
         if (client.connected())
             client.disconnect();
         return false;

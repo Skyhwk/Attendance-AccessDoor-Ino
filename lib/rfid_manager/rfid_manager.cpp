@@ -62,11 +62,10 @@ static void publishRfidLogIfOnline(const DeviceConfig &cfg,
     if (includeMode)
         dataObj["mode"] = modeToString(cfg.mode);
 
-    Serial.println(datetime + " Send data to server");
-
     String payload;
     serializeJson(docPayload, payload);
     MQTT.publishLog(payload);
+    Serial.println(String(payload) + " Send data to server");
 }
 
 static void addLocalLog(const DeviceConfig &cfg,
@@ -152,6 +151,16 @@ void RFIDManager::handleTag(const String &tag)
     }
     String nama = hasAccess ? String(rec.full_name) : String("");
 
+    Serial.println("[RFID] tagRfid=" + String(tag));
+    Serial.println("[RFID] Nama=" + nama);
+    Serial.println("[RFID] Has Access=" + String(hasAccess));
+    Serial.println("[RFID] Mode=" + String((int)cfg.mode));
+    Serial.println("[RFID] Mode Device Data=" + String((int)cfg.modeDeviceData));
+    Serial.println("[RFID] Mode Device Data Tersedia=" + String(MODE_ACCESS_DOOR) + " & " + String(MODE_ATTENDANCE));
+
+    Serial.println(String("[RFID] Kondisi Satu=") + String(cfg.modeDeviceData == MODE_ACCESS_DOOR ? 1 : 0));
+    Serial.println(String("[RFID] Kondisi Dua=") + String(cfg.modeDeviceData == MODE_ATTENDANCE ? 1 : 0));
+
     if (cfg.modeDeviceData == MODE_ACCESS_DOOR)
     {
         if (cfg.mode != MODE_NORMAL)
@@ -169,18 +178,17 @@ void RFIDManager::handleTag(const String &tag)
         else
         {
             Buzzer.granted();
-            LCD.showTemp(nama, "Akses", 2000);
+            LCD.showTemp(nama, "Akses diterima", 2000);
             Door.open();
         }
 
         String datetime = Time.datetime();
-        String status = hasAccess ? String("Granted") : String("Rejected");
+        String status = hasAccess ? String("Akses diterima") : String("Akses ditolak");
         publishRfidLogIfOnline(cfg, tag, nama, datetime, status, false);
         addLocalLog(cfg, tag, nama, datetime);
         return;
     }
-
-    if (cfg.modeDeviceData == MODE_ATTENDANCE)
+    else if (cfg.modeDeviceData == MODE_ATTENDANCE)
     {
         if (cfg.mode == MODE_SCAN)
         {
@@ -230,7 +238,7 @@ void RFIDManager::handleTag(const String &tag)
             if (ok)
             {
                 Buzzer.granted();
-                LCD.setInfo2(String(tag) + "Sending..");
+                LCD.setInfo2(String(tag) + " Sending..");
             }
             else
             {
@@ -244,7 +252,9 @@ void RFIDManager::handleTag(const String &tag)
         LCD.showTemp("Mode", "Invalid", 2000);
         return;
     }
-
-    Buzzer.reject();
-    LCD.showTemp("Device", "Invalid", 2000);
+    else
+    {
+        Buzzer.reject();
+        LCD.showTemp("Device", "Invalid", 2000);
+    }
 }

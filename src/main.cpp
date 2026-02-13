@@ -30,6 +30,10 @@ enum DeviceState
 
 DeviceState deviceState = STATE_BOOT;
 
+// ================= TIMING =================
+unsigned long bootTimeMs = 0;
+unsigned long lastApplyModeMs = 0;
+
 // ================= TASK HANDLES =================
 TaskHandle_t taskHandleRFID;
 TaskHandle_t taskHandleMQTT;
@@ -44,33 +48,41 @@ static void applyModeFromConfigToSystem()
 
     if (cfg.modeDeviceData == MODE_ACCESS_DOOR)
     {
+        Serial.println("[Main] Mode Access Door = " + String((int)cfg.mode));
         if (cfg.mode == MODE_OPEN)
         {
+            Serial.println("Force Open");
             Door.forceOpen();
             LCD.setInfo1("Force Open");
         }
         else if (cfg.mode == MODE_CLOSE)
         {
+            Serial.println("Force Close");
             Door.forceClose();
             LCD.setInfo1("Force Close");
         }
         else
         {
+            Serial.println("Normal");
             Door.normal();
             LCD.setInfo1("");
         }
 
-        return;
+        // return;
     }
-
-    if (cfg.modeDeviceData == MODE_ATTENDANCE)
+    else if (cfg.modeDeviceData == MODE_ATTENDANCE)
     {
         if (cfg.mode == MODE_ADD)
+        {
+            Serial.println("Mode ADD");
             LCD.setInfo1("ADD Card");
+        }
         else
-            LCD.setInfo1("Scan");
-
-        return;
+        {
+            Serial.println("Mode Scan");
+            LCD.setInfo1("");
+        }
+        // return;
     }
 }
 
@@ -176,6 +188,8 @@ bool initConfig()
     if (!Config.load())
         return false;
 
+    Config.setDefaultIfInvalid();
+
     return true;
 }
 
@@ -229,9 +243,6 @@ void setup()
     }
 
     deviceState = STATE_RUN;
-
-    applyModeFromConfigToSystem();
-
     Wifi.begin();
     MQTT.begin();
     Positioning.begin();
@@ -239,7 +250,12 @@ void setup()
 
     startTasks();
 
+    // Set waktu boot untuk tracking 10 detik pertama
+    bootTimeMs = millis();
+    lastApplyModeMs = bootTimeMs;
+
     Serial.println("System Ready");
+    applyModeFromConfigToSystem();
 }
 
 // ================= LOOP =================
@@ -256,7 +272,22 @@ void loop()
     if (deviceState == STATE_RUN)
     {
         Wifi.handle();
+        
+        // Apply mode setiap 2 detik selama 10 detik pertama setelah boot
+        unsigned long now = millis();
+        unsigned long elapsedSinceBoot = now - bootTimeMs;
+        
+        if (elapsedSinceBoot < 10000) // 10 detik pertama
+        {
+            if (now - lastApplyModeMs >= 2000) // Setiap 2 detik
+            {
+                Serial.println("[Main] Re-apply mode (elapsed=" + String(elapsedSinceBoot) + "ms)");
+                applyModeFromConfigToSystem();
+                lastApplyModeMs = now;
+            }
+        }
     }
 
+    
     delay(1000);
 }

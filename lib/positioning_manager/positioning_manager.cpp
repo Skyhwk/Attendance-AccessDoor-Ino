@@ -85,17 +85,20 @@ bool PositioningManager::doSync()
         LCD.setDeviceName(name);
 
     auto &cfg = Config.get();
-    DeviceMode newMode = parseMode(modeStr);
-    cfg.mode = newMode;
+
+    // Hanya update mode jika server mengirim nilai yang valid (tidak kosong)
+    if (modeStr.length() > 0)
+    {
+        DeviceMode newMode = parseMode(modeStr);
+        Serial.println("[Positioning] Update mode from server: " + modeStr + " -> " + String((int)newMode));
+        cfg.mode = newMode;
+    }
+    else
+    {
+        Serial.println("[Positioning] Server tidak mengirim mode, tetap gunakan mode saat ini: " + String((int)cfg.mode));
+    }
 
     bool saved = Config.save();
-
-    if (cfg.mode == MODE_OPEN)
-        Door.forceOpen();
-    else if (cfg.mode == MODE_CLOSE)
-        Door.forceClose();
-    else
-        Door.normal();
 
     if (!saved)
         return false;
@@ -113,7 +116,7 @@ bool PositioningManager::fetchInfo(String &outName, String &outMode, String &out
         return false;
 
     String base = ensureHttpScheme(String(cfg.host));
-    String url = base + "/v3/public/api/device_intilab?mode=sync&token=intilab_jaya&device=" + String(cfg.iddev);
+    String url = base + "/v3/public/api/iot-intilab?mode=sync&token=intilab_jaya&device=" + String(cfg.iddev);
 
     Serial.println("[Positioning] Syncing: " + url);
 

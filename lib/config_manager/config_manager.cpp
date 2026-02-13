@@ -16,8 +16,10 @@ bool ConfigManager::load()
     if (toRead > sizeof(DeviceConfig))
         toRead = sizeof(DeviceConfig);
 
-    f.read((uint8_t *)&config, toRead);
+    size_t read = f.read((uint8_t *)&config, toRead);
     f.close();
+
+    Serial.println("[Config] Load filesize=" + String(sz) + " read=" + String(read) + " modeDeviceData=" + String((int)config.modeDeviceData) + " mode=" + String((int)config.mode));
 
     // migration heuristic: older firmware version may have stored iddev where topic_subscribe is now
     if (config.iddev[0] == '\0' && config.topic_subscribe[0] != '\0')
@@ -40,9 +42,13 @@ bool ConfigManager::save()
     if (!f)
         return false;
 
-    f.write((uint8_t *)&config, sizeof(DeviceConfig));
+    size_t written = f.write((uint8_t *)&config, sizeof(DeviceConfig));
+    f.flush(); // Pastikan data benar-benar ditulis ke SD card
     f.close();
-    return true;
+    
+    Serial.println("[Config] Save mode=" + String((int)config.mode) + " written=" + String(written) + " expected=" + String(sizeof(DeviceConfig)));
+    
+    return (written == sizeof(DeviceConfig));
 }
 
 DeviceConfig &ConfigManager::get()
@@ -82,9 +88,33 @@ void ConfigManager::setDefaultIfInvalid()
     if (config.offsetday <= 0)
         config.offsetday = 7;
 
-    // Mode logic
+    // Mode Device Data must be valid
+    int mdd = (int)config.modeDeviceData;
+    if (mdd == '0' || mdd == '1')
+        mdd -= '0';
+    if (mdd != (int)MODE_ACCESS_DOOR && mdd != (int)MODE_ATTENDANCE)
+        mdd = (int)MODE_ACCESS_DOOR;
+    config.modeDeviceData = (DeviceModeData)mdd;
+
+    // Mode must be valid for selected device type
+    int md = (int)config.mode;
+    int originalMd = md;
+    
     if (config.modeDeviceData == MODE_ACCESS_DOOR)
-        config.mode = MODE_NORMAL;
+    {
+        if (md != (int)MODE_NORMAL && md != (int)MODE_OPEN && md != (int)MODE_CLOSE)
+            md = (int)MODE_NORMAL;
+    }
     else
-        config.mode = MODE_SCAN;
+    {
+        if (md != (int)MODE_SCAN && md != (int)MODE_ADD)
+            md = (int)MODE_SCAN;
+    }
+    
+    if (originalMd != md)
+    {
+        Serial.println("[Config] Mode invalid! Reset from " + String(originalMd) + " to " + String(md));
+    }
+    
+    config.mode = (DeviceMode)md;
 }
