@@ -1,0 +1,10 @@
+{
+    "name": "sync_manager",
+    "version": "1.0.0",
+    "description": "Offline data synchronization manager",
+    "dependencies": {
+        "wifi_manager": "*",
+        "mqtt_manager": "*",
+        "config_manager": "*"
+    }
+}

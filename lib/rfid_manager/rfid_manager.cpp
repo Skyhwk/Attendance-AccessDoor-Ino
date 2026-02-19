@@ -7,6 +7,7 @@
 #include "time_global.h"
 #include "mqtt_manager.h"
 #include "wifi_manager.h"
+#include "sync_manager.h"
 #include <ArduinoJson.h>
 #include <rdm6300.h>
 
@@ -40,32 +41,66 @@ static const char *modeToString(DeviceMode mode)
     }
 }
 
-static void publishRfidLogIfOnline(const DeviceConfig &cfg,
-                                   const String &rfid,
-                                   const String &nama,
-                                   const String &datetime,
-                                   const String &status,
-                                   bool includeMode)
+static void publishRfidLogWithOfflineQueue(const DeviceConfig &cfg,
+                                           const String &rfid,
+                                           const String &nama,
+                                           const String &datetime,
+                                           const String &status,
+                                           bool includeMode)
 {
-    if (!Wifi.isConnected() || !MQTT.isConnected())
-        return;
+    bool online = Wifi.isConnected() && MQTT.isConnected();
+    bool pushSuccess = false;
 
-    StaticJsonDocument<512> docPayload;
-    docPayload["topic"] = modeDeviceDataToString(cfg.modeDeviceData);
-    docPayload["device"] = String(cfg.iddev);
+    // Coba push langsung jika online
+    if (online)
+    {
+        StaticJsonDocument<512> docPayload;
+        docPayload["topic"] = modeDeviceDataToString(cfg.modeDeviceData);
+        docPayload["device"] = String(cfg.iddev);
 
-    JsonObject dataObj = docPayload.createNestedObject("data");
-    dataObj["rfid"] = rfid;
-    dataObj["nama"] = nama;
-    dataObj["datetime"] = datetime;
-    dataObj["status"] = status;
-    if (includeMode)
-        dataObj["mode"] = modeToString(cfg.mode);
+        JsonObject dataObj = docPayload.createNestedObject("data");
+        dataObj["rfid"] = rfid;
+        dataObj["nama"] = nama;
+        dataObj["datetime"] = datetime;
+        dataObj["status"] = status;
+        if (includeMode)
+            dataObj["mode"] = modeToString(cfg.mode);
 
-    String payload;
-    serializeJson(docPayload, payload);
-    MQTT.publishLog(payload);
-    Serial.println(String(payload) + " Send data to server");
+        String payload;
+        serializeJson(docPayload, payload);
+
+        pushSuccess = MQTT.publishLog(payload);
+
+        if (pushSuccess)
+        {
+            Serial.println("[RFID] Data sent to server: " + payload);
+            return;
+        }
+        else
+        {
+            Serial.println("[RFID] MQTT publish failed, saving to offline queue");
+        }
+    }
+
+    // Jika offline atau push gagal, simpan ke offline queue
+    bool queued = Sync.addOfflineRecord(
+        rfid.c_str(),
+        nama.c_str(),
+        datetime.c_str(),
+        status.c_str(),
+        cfg.iddev,
+        (uint8_t)cfg.modeDeviceData,
+        (uint8_t)cfg.mode,
+        includeMode);
+
+    if (queued)
+    {
+        Serial.println("[RFID] Data queued for offline sync");
+    }
+    else
+    {
+        Serial.println("[RFID] ERROR: Failed to queue offline data!");
+    }
 }
 
 static void addLocalLog(const DeviceConfig &cfg,
@@ -177,14 +212,16 @@ void RFIDManager::handleTag(const String &tag)
         }
         else
         {
+            Serial.println("[RFID] Buzzer granted: beeb 2 kali");
             Buzzer.granted();
+            Serial.println("[RFID] Akses diterima: " + nama);
             LCD.showTemp(nama, "Akses diterima", 2000);
             Door.open();
         }
 
         String datetime = Time.datetime();
         String status = hasAccess ? String("Akses diterima") : String("Akses ditolak");
-        publishRfidLogIfOnline(cfg, tag, nama, datetime, status, false);
+        publishRfidLogWithOfflineQueue(cfg, tag, nama, datetime, status, false);
         addLocalLog(cfg, tag, nama, datetime);
         return;
     }
@@ -205,7 +242,7 @@ void RFIDManager::handleTag(const String &tag)
 
             String datetime = Time.datetime();
             String status = hasAccess ? String("Accepted") : String("Rejected");
-            publishRfidLogIfOnline(cfg, tag, nama, datetime, status, true);
+            publishRfidLogWithOfflineQueue(cfg, tag, nama, datetime, status, true);
             addLocalLog(cfg, tag, nama, datetime);
             return;
         }

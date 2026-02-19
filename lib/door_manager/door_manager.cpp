@@ -25,6 +25,27 @@ void DoorManager::open()
         return;
     }
 
+    vTaskDelay(pdMS_TO_TICKS(150));
+
+    digitalWrite(_relayPin, HIGH);
+    vTaskDelay(pdMS_TO_TICKS(_openMs));
+    digitalWrite(_relayPin, LOW);
+}
+
+void DoorManager::noTouchOpen()
+{
+    if (_relayPin < 0)
+        return;
+
+    if (_mode == DOOR_FORCE_CLOSE)
+        return;
+
+    if (_mode == DOOR_FORCE_OPEN)
+    {
+        digitalWrite(_relayPin, HIGH);
+        return;
+    }
+
     Buzzer.found();
     vTaskDelay(pdMS_TO_TICKS(150));
 

@@ -44,19 +44,21 @@ void MQTTManager::loop()
     client.loop();
 }
 
-void MQTTManager::publishLog(String payload)
+bool MQTTManager::publishLog(String payload)
 {
     if (!isConnected())
-        return;
+        return false;
 
     auto &cfg = Config.get();
     String topic = cfg.topic_publish;
     if (topic.isEmpty())
     {
         Serial.println("[MQTT] topic_publish empty");
-        return;
+        return false;
     }
-    client.publish(topic.c_str(), payload.c_str());
+
+    bool ok = client.publish(topic.c_str(), payload.c_str());
+    return ok;
 }
 
 bool MQTTManager::publish(const char *topic, const char *payload)
@@ -228,14 +230,14 @@ bool MQTTManager::handleCommandJson(const String &topic, const String &message)
     {
         if (data.length() == 0)
             return false;
-        // return syncAccessFromHttp(data, 15000);
+        return syncAccessFromHttp(data, 15000);
     }
 
     if (cmd == "add_user" || cmd == "delete_user" || cmd == "add_access" || cmd == "delete_access" || cmd == "adduser" || cmd == "deleteuser")
     {
         if (data.length() == 0)
             return false;
-        // return syncAccessFromHttp(data, 15000);
+        return syncAccessFromHttp(data, 15000);
     }
 
     if (cmd == "change_mode")
@@ -311,7 +313,7 @@ bool MQTTManager::handleCommandJson(const String &topic, const String &message)
 
     if (cmd == "open")
     {
-        Door.open();
+        Door.noTouchOpen();
     }
     if (cmd == "reboot")
     {

@@ -67,12 +67,12 @@ void BuzzerManager::update()
 
 void BuzzerManager::granted()
 {
-    play(2, 300, 200); // 2x agak panjang
+    play(2, 80, 100); // 2x agak panjang
 }
 
 void BuzzerManager::reject()
 {
-    play(3, 200, 200); // 3x sedang
+    play(3, 80, 100); // 3x sedang
 }
 
 void BuzzerManager::reboot()
@@ -82,7 +82,7 @@ void BuzzerManager::reboot()
 
 void BuzzerManager::reset()
 {
-    play(5, 80, 100); // 5x pendek
+    play(10, 80, 100); // 5x pendek
 }
 
 void BuzzerManager::found()

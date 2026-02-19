@@ -483,7 +483,64 @@ Cek:
 
 ---
 
-## 15) Catatan pengembangan
+## 15) Offline Queue (Auto-Sync Data)
+
+### Overview
+
+Firmware sekarang mendukung **offline queue** untuk memastikan tidak ada data yang hilang saat device offline. Semua RFID scan akan otomatis:
+
+1. **Coba push langsung** ke MQTT jika online
+2. **Jika gagal atau offline**: Simpan ke `/offline_data.bin`
+3. **Auto-sync saat online**: Device akan otomatis push data ke server saat idle
+
+### File yang digunakan
+
+- `/offline_data.bin` (max 1000 records, ~140 KB)
+
+### Monitoring
+
+Via Portal API:
+
+```bash
+GET /api/sync/status          # Check pending count
+GET /api/status               # Include offlinePending field
+GET /download/offline         # Download offline_data.bin
+GET /api/sync/clear           # Clear queue (emergency)
+```
+
+Response `/api/status`:
+
+```json
+{
+  "ok": true,
+  "iddev": "device001",
+  "ip": "192.168.1.100",
+  "online": true,
+  "offlinePending": 25
+}
+```
+
+### Behavior
+
+- **Sync interval**: 5 detik
+- **Throttling**: 1 record per cycle (non-blocking)
+- **Overflow**: Ring buffer (overwrite oldest jika penuh)
+- **Auto-reset**: Counter reset saat semua terkirim
+
+### Serial Monitor
+
+```
+[Sync] Pending offline records: 25
+[Sync] Record sent successfully. Remaining: 24
+[Sync] All offline data synced! Resetting counters.
+```
+
+📖 **Dokumentasi lengkap**: Lihat `OFFLINE_QUEUE.md`
+
+---
+
+## 16) Catatan pengembangan
 
 - Konfigurasi disimpan sebagai binary struct ke `/config.bin`. Jika Anda mengubah struct `DeviceConfig`, firmware lama bisa butuh migrasi.
 - Log tersimpan ke `log.bin` sebagai ring-buffer header + records. Download via portal untuk diolah di PC.
+- **Offline queue**: Data RFID disimpan ke `offline_data.bin` jika offline, auto-sync saat online.

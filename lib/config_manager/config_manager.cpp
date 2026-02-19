@@ -7,7 +7,18 @@ bool ConfigManager::load()
 {
     File f = SD.open("/config.bin");
     if (!f)
-        return false;
+    {
+        Serial.println("[Config] config.bin not found, creating default...");
+        memset(&config, 0, sizeof(DeviceConfig));
+        setDefaultIfInvalid();
+        if (!save())
+        {
+            Serial.println("[Config] Failed to create default config.bin!");
+            return false;
+        }
+        Serial.println("[Config] Default config.bin created successfully");
+        return true;
+    }
 
     memset(&config, 0, sizeof(DeviceConfig));
 
@@ -32,6 +43,8 @@ bool ConfigManager::load()
         }
     }
 
+    setDefaultIfInvalid();
+
     return true;
 }
 
@@ -45,9 +58,9 @@ bool ConfigManager::save()
     size_t written = f.write((uint8_t *)&config, sizeof(DeviceConfig));
     f.flush(); // Pastikan data benar-benar ditulis ke SD card
     f.close();
-    
+
     Serial.println("[Config] Save mode=" + String((int)config.mode) + " written=" + String(written) + " expected=" + String(sizeof(DeviceConfig)));
-    
+
     return (written == sizeof(DeviceConfig));
 }
 
@@ -80,9 +93,9 @@ void ConfigManager::setDefaultIfInvalid()
 
     // MQTT topics boleh kosong
     if (config.topic_subscribe[0] == '\0')
-        strcpy(config.topic_subscribe, "");
+        strcpy(config.topic_subscribe, "/intilab/iot/multidevices");
     if (config.topic_publish[0] == '\0')
-        strcpy(config.topic_publish, "");
+        strcpy(config.topic_publish, "/intilab/iot/log-access");
 
     // Offset day
     if (config.offsetday <= 0)
@@ -99,7 +112,7 @@ void ConfigManager::setDefaultIfInvalid()
     // Mode must be valid for selected device type
     int md = (int)config.mode;
     int originalMd = md;
-    
+
     if (config.modeDeviceData == MODE_ACCESS_DOOR)
     {
         if (md != (int)MODE_NORMAL && md != (int)MODE_OPEN && md != (int)MODE_CLOSE)
@@ -110,11 +123,11 @@ void ConfigManager::setDefaultIfInvalid()
         if (md != (int)MODE_SCAN && md != (int)MODE_ADD)
             md = (int)MODE_SCAN;
     }
-    
+
     if (originalMd != md)
     {
         Serial.println("[Config] Mode invalid! Reset from " + String(originalMd) + " to " + String(md));
     }
-    
+
     config.mode = (DeviceMode)md;
 }

@@ -14,6 +14,7 @@
 #include "portal_config.h"
 #include "buzzer_manager.h"
 #include "positioning_manager.h"
+#include "sync_manager.h"
 
 #define PIN_RELAY 25
 #define PIN_BUZZER 26
@@ -117,6 +118,7 @@ void taskMQTT(void *pv)
         {
             MQTT.loop();
             Positioning.loop();
+            Sync.loop(); // Auto-sync offline data saat online dan idle
         }
 
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -162,7 +164,7 @@ void taskNotouch(void *pv)
         {
             if (digitalRead(PIN_TOUCH_CONFIG) == LOW)
             {
-                Door.open();
+                Door.noTouchOpen();
             }
         }
 
@@ -195,8 +197,6 @@ bool initConfig()
 
 void startTasks()
 {
-    xTaskCreate(taskLCD, "lcd", 4096, NULL, 1, &taskHandleLCD);
-    xTaskCreate(taskBuzzer, "buzzer", 2048, NULL, 2, &taskHandleBuzzer);
     xTaskCreate(taskTime, "time", 4096, NULL, 1, &taskHandleTime);
     xTaskCreate(taskRFID, "rfid", 4096, NULL, 1, &taskHandleRFID);
     xTaskCreate(taskMQTT, "mqtt", 4096, NULL, 1, &taskHandleMQTT);
@@ -215,6 +215,10 @@ void setup()
     Buzzer.begin(PIN_BUZZER);
     Door.begin(PIN_RELAY);
     Time.begin();
+
+    // Jalankan task LCD & Buzzer lebih awal agar bisa dipakai saat AP mode
+    xTaskCreate(taskLCD, "lcd", 4096, NULL, 1, &taskHandleLCD);
+    xTaskCreate(taskBuzzer, "buzzer", 2048, NULL, 2, &taskHandleBuzzer);
 
     if (!initStorage())
     {
@@ -246,6 +250,7 @@ void setup()
     Wifi.begin();
     MQTT.begin();
     Positioning.begin();
+    Sync.begin(); // Init offline data queue
     RFID.begin(PIN_RFID_RX);
 
     startTasks();
@@ -272,11 +277,11 @@ void loop()
     if (deviceState == STATE_RUN)
     {
         Wifi.handle();
-        
+
         // Apply mode setiap 2 detik selama 10 detik pertama setelah boot
         unsigned long now = millis();
         unsigned long elapsedSinceBoot = now - bootTimeMs;
-        
+
         if (elapsedSinceBoot < 10000) // 10 detik pertama
         {
             if (now - lastApplyModeMs >= 2000) // Setiap 2 detik
@@ -288,6 +293,5 @@ void loop()
         }
     }
 
-    
     delay(1000);
 }

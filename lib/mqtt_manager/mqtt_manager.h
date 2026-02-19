@@ -8,7 +8,7 @@ class MQTTManager
 public:
     void begin();
     void loop();
-    void publishLog(String payload);
+    bool publishLog(String payload);
 
     bool publish(const char *topic, const char *payload);
 

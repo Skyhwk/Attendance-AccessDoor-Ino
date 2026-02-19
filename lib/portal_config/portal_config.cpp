@@ -10,6 +10,7 @@
 #include "config_manager.h"
 #include "wifi_manager.h"
 #include "buzzer_manager.h"
+#include "sync_manager.h"
 
 static DNSServer dns;
 static AsyncWebServer server(80);
@@ -144,11 +145,13 @@ static void serverRoutes()
                   String id = (cfg.iddev[0] == '\0') ? String("") : String(cfg.iddev);
                   String ip = getIpString();
                   bool online = Wifi.isConnected();
+                  uint32_t pending = Sync.getPendingCount();
 
                   String out = "{\"ok\":true";
                   out += ",\"iddev\":" + String("\"") + id + "\"";
                   out += ",\"ip\":" + String("\"") + ip + "\"";
                   out += ",\"online\":" + String(online ? "true" : "false");
+                  out += ",\"offlinePending\":" + String(pending);
                   out += "}";
 
                   request->send(200, "application/json", out); });
@@ -249,6 +252,50 @@ static void serverRoutes()
                   }
                   streamDownload(request, "/access.bin", "access.bin"); });
 
+    server.on("/download/offline", HTTP_GET, [](AsyncWebServerRequest *request)
+              {
+                  if (!isLoggedIn(request))
+                  {
+                      redirectTo(request, "/login");
+                      return;
+                  }
+                  streamDownload(request, "/offline_data.bin", "offline_data.bin"); });
+
+    server.on("/api/sync/status", HTTP_GET, [](AsyncWebServerRequest *request)
+              {
+                  if (!isLoggedIn(request))
+                  {
+                      request->send(401, "application/json", "{\"ok\":false}");
+                      return;
+                  }
+
+                  uint32_t pending = Sync.getPendingCount();
+                  
+                  String out = "{\"ok\":true";
+                  out += ",\"pending\":" + String(pending);
+                  out += "}";
+
+                  request->send(200, "application/json", out); });
+
+    server.on("/api/sync/clear", HTTP_GET, [](AsyncWebServerRequest *request)
+              {
+                  if (!isLoggedIn(request))
+                  {
+                      redirectTo(request, "/login");
+                      return;
+                  }
+                  
+                  bool ok = Sync.clearOfflineData();
+                  
+                  if (ok)
+                  {
+                      request->send(200, "application/json", "{\"ok\":true,\"message\":\"Offline data cleared\"}");
+                  }
+                  else
+                  {
+                      request->send(500, "application/json", "{\"ok\":false,\"message\":\"Failed to clear offline data\"}");
+                  } });
+
     server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request)
               {
                   if (!isLoggedIn(request))
@@ -335,6 +382,7 @@ void PortalConfig::startAp()
     WiFi.softAP(name.c_str());
     delay(200);
     dns.start(53, "*", WiFi.softAPIP());
+    Serial.println("[Portal] AP started: " + name + " " + WiFi.softAPIP().toString());
     Buzzer.reset();
 }
 

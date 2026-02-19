@@ -6,6 +6,7 @@ class DoorManager
 public:
     void begin(int relayPin);
     void open();
+    void noTouchOpen();
     void normal();
     void forceOpen();
     void forceClose();
