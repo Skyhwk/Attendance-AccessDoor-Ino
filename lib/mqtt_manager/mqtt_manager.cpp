@@ -334,10 +334,14 @@ bool MQTTManager::handleCommandJson(const String &topic, const String &message)
         if (sepIdx >= 0) {
             String part1 = data.substring(0, sepIdx);
             String part2 = data.substring(sepIdx + 1);
-            LCD.setInfo1(part1.trim());
-            LCD.setInfo2(part2.trim());
+            part1.trim(); // call to trim() acts in-place if using Arduino String
+            part2.trim();
+            LCD.setInfo1(part1);
+            LCD.setInfo2(part2);
         } else {
-            LCD.setInfo1(data);
+            String trimmedData = data;
+            trimmedData.trim();
+            LCD.setInfo1(trimmedData);
             LCD.setInfo2("");
         }
    
