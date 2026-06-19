@@ -328,6 +328,20 @@ bool MQTTManager::handleCommandJson(const String &topic, const String &message)
         delay(3000);
         ESP.restart();
     }
+    if(cmd == "response")
+    {
+        int sepIdx = data.indexOf('-');
+        if (sepIdx >= 0) {
+            String part1 = data.substring(0, sepIdx);
+            String part2 = data.substring(sepIdx + 1);
+            LCD.setInfo1(part1.trim());
+            LCD.setInfo2(part2.trim());
+        } else {
+            LCD.setInfo1(data);
+            LCD.setInfo2("");
+        }
+   
+    }
 
     return false;
 }
