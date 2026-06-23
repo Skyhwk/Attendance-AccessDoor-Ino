@@ -18,6 +18,27 @@ static bool isEmptyStr(const char *s)
     return (s == nullptr) || (s[0] == '\0');
 }
 
+static bool isHttpsUrl(const String &url)
+{
+    return url.startsWith("https://");
+}
+
+static String ensureHttpScheme(const String &host)
+{
+    if (host.startsWith("http://") || host.startsWith("https://"))
+        return host;
+    return String("http://") + host;
+}
+
+static String syncModeFromCmd(const String &cmd)
+{
+    if (cmd == "add_user" || cmd == "add_access" || cmd == "adduser")
+        return "add";
+    if (cmd == "delete_user" || cmd == "delete_access" || cmd == "deleteuser")
+        return "delete";
+    return "sync";
+}
+
 void MQTTManager::begin()
 {
     auto &cfg = Config.get();
@@ -226,18 +247,11 @@ bool MQTTManager::handleCommandJson(const String &topic, const String &message)
 
     Serial.println("[MQTT] Command cmd=" + cmd);
 
-    if (cmd == "sync_access" || cmd == "sync_user" || cmd == "sync_users" || cmd == "syncuser")
+    if (cmd == "sync_access" || cmd == "sync_user" || cmd == "sync_users" || cmd == "syncuser" ||
+        cmd == "add_user" || cmd == "delete_user" || cmd == "add_access" || cmd == "delete_access" ||
+        cmd == "adduser" || cmd == "deleteuser")
     {
-        if (data.length() == 0)
-            return false;
-        return syncAccessFromHttp(data, 15000);
-    }
-
-    if (cmd == "add_user" || cmd == "delete_user" || cmd == "add_access" || cmd == "delete_access" || cmd == "adduser" || cmd == "deleteuser")
-    {
-        if (data.length() == 0)
-            return false;
-        return syncAccessFromHttp(data, 15000);
+        return syncAccessFromCommand(cmd, data, 15000);
     }
 
     if (cmd == "change_mode")
@@ -344,20 +358,81 @@ bool MQTTManager::handleCommandJson(const String &topic, const String &message)
             LCD.setInfo1(trimmedData);
             LCD.setInfo2("");
         }
-   
     }
 
     return false;
 }
 
-bool MQTTManager::syncAccessFromHttp(const String &url, uint32_t timeoutMs)
+String MQTTManager::resolveDownloadUrl(const String &path) const
+{
+    if (path.length() == 0)
+        return path;
+    if (path.startsWith("http://") || path.startsWith("https://"))
+        return path;
+
+    auto &cfg = Config.get();
+    String base = ensureHttpScheme(String(cfg.host));
+    if (path.startsWith("/"))
+        return base + path;
+    return base + "/" + path;
+}
+
+bool MQTTManager::fetchAccessPath(const String &cmd, String &outPath)
+{
+    auto &cfg = Config.get();
+    if (isEmptyStr(cfg.host) || isEmptyStr(cfg.iddev))
+        return false;
+
+    String base = ensureHttpScheme(String(cfg.host));
+    String url = base + "/v3/public/api/iot-intilab?mode=sync" +
+                 "&token=intilab_jaya&device=" + String(cfg.iddev);
+
+    Serial.println("[MQTT] Fetch access path: " + url);
+
+    HTTPClient http;
+    http.setTimeout(15000);
+    if (!http.begin(url))
+        return false;
+
+    int code = http.GET();
+    if (code != HTTP_CODE_OK)
+    {
+        Serial.println("[MQTT] Fetch path failed code=" + String(code));
+        http.end();
+        return false;
+    }
+
+    String body = http.getString();
+    http.end();
+
+    DynamicJsonDocument doc(4096);
+    DeserializationError err = deserializeJson(doc, body);
+    if (err)
+    {
+        Serial.println("[MQTT] Fetch path JSON parse failed");
+        return false;
+    }
+
+    outPath = doc["path"] | "";
+    if (outPath.length() == 0)
+        outPath = doc["topic"] | "";
+
+    Serial.println("[MQTT] Access path from server: " + outPath);
+    return outPath.length() > 0;
+}
+
+bool MQTTManager::downloadAccessBin(const String &url, uint32_t timeoutMs)
 {
     if (!networkReady())
         return false;
 
-    Serial.println("[MQTT] Sync access URL=" + url);
+    String downloadUrl = resolveDownloadUrl(url);
+    if (downloadUrl.length() == 0)
+        return false;
 
-    bool https = url.startsWith("https://");
+    Serial.println("[MQTT] Download access: " + downloadUrl);
+
+    bool https = isHttpsUrl(downloadUrl);
 
     HTTPClient http;
     http.setTimeout(timeoutMs);
@@ -366,37 +441,52 @@ bool MQTTManager::syncAccessFromHttp(const String &url, uint32_t timeoutMs)
     {
         WiFiClientSecure secure;
         secure.setInsecure();
-        if (!http.begin(secure, url))
+        if (!http.begin(secure, downloadUrl))
             return false;
     }
     else
     {
-        if (!http.begin(url))
+        if (!http.begin(downloadUrl))
             return false;
     }
 
     int code = http.GET();
     if (code != HTTP_CODE_OK)
     {
-        Serial.println("[MQTT] HTTP GET failed code=" + String(code));
+        Serial.println("[MQTT] Download failed code=" + String(code));
         http.end();
         return false;
     }
 
     int len = http.getSize();
-    if (len <= 0)
-    {
-        Serial.println("[MQTT] HTTP content length invalid len=" + String(len));
-        http.end();
-        return false;
-    }
-
     Serial.println("[MQTT] Download size=" + String(len));
 
     WiFiClient *stream = http.getStreamPtr();
-    bool ok = Storage.replaceAccessFromStream(*stream, (size_t)len);
+    bool ok = Storage.applyAccessDownload(*stream, len);
     http.end();
 
     Serial.println(String("[MQTT] Sync access ") + (ok ? "OK" : "FAILED"));
     return ok;
+}
+
+bool MQTTManager::syncAccessFromCommand(const String &cmd, const String &data, uint32_t timeoutMs)
+{
+    if (!networkReady())
+        return false;
+
+    String path;
+
+    // Server kirim path/topic relatif lewat MQTT (bukan full URL)
+    if (data.length() > 0 && !data.startsWith("http://") && !data.startsWith("https://"))
+    {
+        path = data;
+        Serial.println("[MQTT] Using path from MQTT data: " + path);
+    }
+    else
+    {
+        if (!fetchAccessPath(cmd, path))
+            return false;
+    }
+
+    return downloadAccessBin(path, timeoutMs);
 }

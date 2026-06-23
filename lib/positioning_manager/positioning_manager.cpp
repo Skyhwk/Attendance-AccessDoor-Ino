@@ -141,7 +141,13 @@ bool PositioningManager::fetchInfo(String &outName, String &outMode, String &out
         return false;
 
     outName = doc["nameDevice"] | "";
-    outMode = doc["mode"] | "";
+
+    if (doc["mode"].isNull()) {
+        outMode = "";
+    } else {
+        outMode = doc["mode"].as<String>();
+    }
+
     outPath = doc["path"] | "";
 
     Serial.println("[Positioning] Synced: " + outName + " " + outMode + " " + outPath);
@@ -180,14 +186,12 @@ bool PositioningManager::downloadAccessBin(const String &url, uint32_t timeoutMs
     }
 
     int len = http.getSize();
-    if (len <= 0)
-    {
-        http.end();
-        return false;
-    }
-
     WiFiClient *stream = http.getStreamPtr();
-    bool ok = Storage.replaceAccessFromStream(*stream, (size_t)len);
+    bool ok = Storage.applyAccessDownload(*stream, len);
     http.end();
+
+    if (len == 0)
+        Serial.println("[Positioning] Download empty access.bin, cleared local access");
+
     return ok;
 }

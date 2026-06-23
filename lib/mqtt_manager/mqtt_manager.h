@@ -26,7 +26,10 @@ private:
     void handleMessage(const char *topic, const byte *payload, unsigned int length);
 
     bool handleCommandJson(const String &topic, const String &message);
-    bool syncAccessFromHttp(const String &url, uint32_t timeoutMs);
+    bool syncAccessFromCommand(const String &cmd, const String &data, uint32_t timeoutMs);
+    bool fetchAccessPath(const String &cmd, String &outPath);
+    bool downloadAccessBin(const String &url, uint32_t timeoutMs);
+    String resolveDownloadUrl(const String &path) const;
 
     WiFiClient espClient;
     PubSubClient client{espClient};

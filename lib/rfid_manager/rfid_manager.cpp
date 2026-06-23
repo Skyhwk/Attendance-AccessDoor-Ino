@@ -14,8 +14,24 @@
 RFIDManager RFID;
 static Rdm6300 rdm6300;
 
+struct DeferredRfidWork
+{
+    bool pending = false;
+    char rfid[16];
+    char nama[32];
+    char datetime[20];
+    char status[32];
+    char iddev[16];
+    uint8_t modeDeviceData = 0;
+    uint8_t mode = 0;
+    bool includeMode = false;
+};
+
+static DeferredRfidWork g_deferred;
+
 static bool isEmptyStr(const char *s);
 static void safeCopy(char *dest, const String &src, size_t len);
+static void safeCopyCStr(char *dest, const char *src, size_t len);
 
 static const char *modeDeviceDataToString(DeviceModeData modeDeviceData)
 {
@@ -42,16 +58,14 @@ static const char *modeToString(DeviceMode mode)
 }
 
 static void publishRfidLogWithOfflineQueue(const DeviceConfig &cfg,
-                                           const String &rfid,
-                                           const String &nama,
-                                           const String &datetime,
-                                           const String &status,
+                                           const char *rfid,
+                                           const char *nama,
+                                           const char *datetime,
+                                           const char *status,
                                            bool includeMode)
 {
     bool online = Wifi.isConnected() && MQTT.isConnected();
-    bool pushSuccess = false;
 
-    // Coba push langsung jika online
     if (online)
     {
         StaticJsonDocument<512> docPayload;
@@ -69,50 +83,41 @@ static void publishRfidLogWithOfflineQueue(const DeviceConfig &cfg,
         String payload;
         serializeJson(docPayload, payload);
 
-        pushSuccess = MQTT.publishLog(payload);
-
-        if (pushSuccess)
+        if (MQTT.publishLog(payload))
         {
             Serial.println("[RFID] Data sent to server: " + payload);
             return;
         }
-        else
-        {
-            Serial.println("[RFID] MQTT publish failed, saving to offline queue");
-        }
+
+        Serial.println("[RFID] MQTT publish failed, saving to offline queue");
     }
 
-    // Jika offline atau push gagal, simpan ke offline queue
     bool queued = Sync.addOfflineRecord(
-        rfid.c_str(),
-        nama.c_str(),
-        datetime.c_str(),
-        status.c_str(),
+        rfid,
+        nama,
+        datetime,
+        status,
         cfg.iddev,
         (uint8_t)cfg.modeDeviceData,
         (uint8_t)cfg.mode,
         includeMode);
 
     if (queued)
-    {
         Serial.println("[RFID] Data queued for offline sync");
-    }
     else
-    {
         Serial.println("[RFID] ERROR: Failed to queue offline data!");
-    }
 }
 
 static void addLocalLog(const DeviceConfig &cfg,
-                        const String &rfid,
-                        const String &nama,
-                        const String &datetime)
+                        const char *rfid,
+                        const char *nama,
+                        const char *datetime)
 {
     LogRecord lr;
-    safeCopy(lr.rfid, rfid, sizeof(lr.rfid));
-    safeCopy(lr.full_name, nama, sizeof(lr.full_name));
-    safeCopy(lr.datetime, datetime, sizeof(lr.datetime));
-    safeCopy(lr.iddev, String(cfg.iddev), sizeof(lr.iddev));
+    safeCopyCStr(lr.rfid, rfid, sizeof(lr.rfid));
+    safeCopyCStr(lr.full_name, nama, sizeof(lr.full_name));
+    safeCopyCStr(lr.datetime, datetime, sizeof(lr.datetime));
+    safeCopyCStr(lr.iddev, cfg.iddev, sizeof(lr.iddev));
     Storage.addLog(lr);
 }
 
@@ -127,9 +132,17 @@ static void safeCopy(char *dest, const String &src, size_t len)
     strncpy(dest, src.c_str(), len - 1);
 }
 
+static void safeCopyCStr(char *dest, const char *src, size_t len)
+{
+    memset(dest, 0, len);
+    if (src != nullptr)
+        strncpy(dest, src, len - 1);
+}
+
 void RFIDManager::begin(int rxPin)
 {
     rdm6300.begin(rxPin);
+    rdm6300.set_tag_timeout(300);
 }
 
 String RFIDManager::read()
@@ -158,43 +171,49 @@ void RFIDManager::loop()
     handleTag(tag);
 }
 
+static void deferBackgroundWork(const DeviceConfig &cfg,
+                                const String &tag,
+                                const String &nama,
+                                const String &datetime,
+                                const String &status,
+                                bool includeMode)
+{
+    safeCopy(g_deferred.rfid, tag, sizeof(g_deferred.rfid));
+    safeCopy(g_deferred.nama, nama, sizeof(g_deferred.nama));
+    safeCopy(g_deferred.datetime, datetime, sizeof(g_deferred.datetime));
+    safeCopy(g_deferred.status, status, sizeof(g_deferred.status));
+    safeCopyCStr(g_deferred.iddev, cfg.iddev, sizeof(g_deferred.iddev));
+    g_deferred.modeDeviceData = (uint8_t)cfg.modeDeviceData;
+    g_deferred.mode = (uint8_t)cfg.mode;
+    g_deferred.includeMode = includeMode;
+    g_deferred.pending = true;
+}
+
+void RFIDManager::processDeferred()
+{
+    if (!g_deferred.pending)
+        return;
+
+    DeferredRfidWork work = g_deferred;
+    g_deferred.pending = false;
+
+    auto &cfg = Config.get();
+    publishRfidLogWithOfflineQueue(cfg,
+                                   work.rfid,
+                                   work.nama,
+                                   work.datetime,
+                                   work.status,
+                                   work.includeMode);
+    addLocalLog(cfg, work.rfid, work.nama, work.datetime);
+}
+
 void RFIDManager::handleTag(const String &tag)
 {
     auto &cfg = Config.get();
 
-    Serial.println("[RFID] Tag=" + tag);
-
     AccessRecord rec;
-    bool hasAccess = false;
-    String tagLower = tag;
-    tagLower.toLowerCase();
-    String tagUpper = tag;
-    tagUpper.toUpperCase();
-
-    if (!hasAccess)
-        hasAccess = Storage.findByRFID(tagLower.c_str(), rec);
-    if (!hasAccess)
-        hasAccess = Storage.findByRFID(tagUpper.c_str(), rec);
-    if (!hasAccess && tagLower.length() > 1)
-    {
-        String trimmed = tagLower;
-        while (!hasAccess && trimmed.length() > 1 && trimmed[0] == '0')
-        {
-            trimmed.remove(0, 1);
-            hasAccess = Storage.findByRFID(trimmed.c_str(), rec);
-        }
-    }
-    String nama = hasAccess ? String(rec.full_name) : String("");
-
-    Serial.println("[RFID] tagRfid=" + String(tag));
-    Serial.println("[RFID] Nama=" + nama);
-    Serial.println("[RFID] Has Access=" + String(hasAccess));
-    Serial.println("[RFID] Mode=" + String((int)cfg.mode));
-    Serial.println("[RFID] Mode Device Data=" + String((int)cfg.modeDeviceData));
-    Serial.println("[RFID] Mode Device Data Tersedia=" + String(MODE_ACCESS_DOOR) + " & " + String(MODE_ATTENDANCE));
-
-    Serial.println(String("[RFID] Kondisi Satu=") + String(cfg.modeDeviceData == MODE_ACCESS_DOOR ? 1 : 0));
-    Serial.println(String("[RFID] Kondisi Dua=") + String(cfg.modeDeviceData == MODE_ATTENDANCE ? 1 : 0));
+    bool hasAccess = Storage.findByRFIDFlexible(tag.c_str(), rec);
+    const char *nama = hasAccess ? rec.full_name : "";
 
     if (cfg.modeDeviceData == MODE_ACCESS_DOOR)
     {
@@ -212,20 +231,20 @@ void RFIDManager::handleTag(const String &tag)
         }
         else
         {
-            Serial.println("[RFID] Buzzer granted: beeb 2 kali");
             Buzzer.granted();
-            Serial.println("[RFID] Akses diterima: " + nama);
             LCD.showTemp(nama, "Akses diterima", 2000);
             Door.open();
         }
 
         String datetime = Time.datetime();
         String status = hasAccess ? String("Akses diterima") : String("Akses ditolak");
-        publishRfidLogWithOfflineQueue(cfg, tag, nama, datetime, status, false);
-        addLocalLog(cfg, tag, nama, datetime);
+        deferBackgroundWork(cfg, tag, nama, datetime, status, false);
+
+        Serial.println("[RFID] Tag=" + tag + " access=" + String(hasAccess) + " nama=" + String(nama));
         return;
     }
-    else if (cfg.modeDeviceData == MODE_ATTENDANCE)
+
+    if (cfg.modeDeviceData == MODE_ATTENDANCE)
     {
         if (cfg.mode == MODE_SCAN)
         {
@@ -242,8 +261,9 @@ void RFIDManager::handleTag(const String &tag)
 
             String datetime = Time.datetime();
             String status = hasAccess ? String("Accepted") : String("Rejected");
-            publishRfidLogWithOfflineQueue(cfg, tag, nama, datetime, status, true);
-            addLocalLog(cfg, tag, nama, datetime);
+            deferBackgroundWork(cfg, tag, nama, datetime, status, true);
+
+            Serial.println("[RFID] Tag=" + tag + " scan=" + String(hasAccess));
             return;
         }
 
@@ -255,6 +275,9 @@ void RFIDManager::handleTag(const String &tag)
                 LCD.showTemp("MQTT", "topic empty", 2000);
                 return;
             }
+
+            Buzzer.granted();
+            LCD.setInfo2(String(tag) + " Sending..");
 
             StaticJsonDocument<256> doc;
             doc["topic"] = "adduser";
@@ -271,13 +294,7 @@ void RFIDManager::handleTag(const String &tag)
             String payload;
             serializeJson(doc, payload);
 
-            bool ok = MQTT.publish(cfg.topic_publish, payload.c_str());
-            if (ok)
-            {
-                Buzzer.granted();
-                LCD.setInfo2(String(tag) + " Sending..");
-            }
-            else
+            if (!MQTT.publish(cfg.topic_publish, payload.c_str()))
             {
                 Buzzer.reject();
                 LCD.setInfo2("MQTT Failed");
@@ -289,9 +306,7 @@ void RFIDManager::handleTag(const String &tag)
         LCD.showTemp("Mode", "Invalid", 2000);
         return;
     }
-    else
-    {
-        Buzzer.reject();
-        LCD.showTemp("Device", "Invalid", 2000);
-    }
+
+    Buzzer.reject();
+    LCD.showTemp("Device", "Invalid", 2000);
 }

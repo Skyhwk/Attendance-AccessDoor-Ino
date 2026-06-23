@@ -11,6 +11,8 @@
 #include "wifi_manager.h"
 #include "buzzer_manager.h"
 #include "sync_manager.h"
+#include "storage_manager.h"
+#include "time_global.h"
 
 static DNSServer dns;
 static AsyncWebServer server(80);
@@ -241,7 +243,9 @@ static void serverRoutes()
                       redirectTo(request, "/login");
                       return;
                   }
-                  streamDownload(request, "/log.bin", "log.bin"); });
+                  String logPath = Storage.getTodayLogPath();
+                  String downloadName = String("log-") + Time.date() + ".txt";
+                  streamDownload(request, logPath.c_str(), downloadName.c_str()); });
 
     server.on("/download/akses", HTTP_GET, [](AsyncWebServerRequest *request)
               {

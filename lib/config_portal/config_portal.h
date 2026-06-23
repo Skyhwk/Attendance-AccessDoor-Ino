@@ -10,6 +10,8 @@
 #include "sdcard.h"
 #include "config_manager.h"
 #include "wifi_manager.h"
+#include "storage_manager.h"
+#include "time_global.h"
 
 class ConfigPortal
 {
@@ -337,7 +339,9 @@ private:
                            redirect(request, "/login");
                            return;
                        }
-                       streamFile(request, "/log.bin", "log.bin"); });
+                       String logPath = Storage.getTodayLogPath();
+                       String downloadName = String("log-") + Time.date() + ".txt";
+                       streamFile(request, logPath.c_str(), downloadName.c_str()); });
 
         _server.on("/download/akses", HTTP_GET, [this](AsyncWebServerRequest *request)
                    {

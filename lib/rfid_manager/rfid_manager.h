@@ -7,6 +7,7 @@ public:
     void begin(int rxPin);
     String read();
     void loop();
+    void processDeferred();
 
 private:
     bool readTag(String &outTag);

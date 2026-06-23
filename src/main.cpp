@@ -106,7 +106,7 @@ void taskRFID(void *pv)
             RFID.loop();
         }
 
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
@@ -119,6 +119,8 @@ void taskMQTT(void *pv)
             MQTT.loop();
             Positioning.loop();
             Sync.loop(); // Auto-sync offline data saat online dan idle
+            Storage.loopLogMaintenance();
+            RFID.processDeferred();
         }
 
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -198,8 +200,8 @@ bool initConfig()
 void startTasks()
 {
     xTaskCreate(taskTime, "time", 4096, NULL, 1, &taskHandleTime);
-    xTaskCreate(taskRFID, "rfid", 4096, NULL, 1, &taskHandleRFID);
-    xTaskCreate(taskMQTT, "mqtt", 4096, NULL, 1, &taskHandleMQTT);
+    xTaskCreate(taskRFID, "rfid", 8192, NULL, 3, &taskHandleRFID);
+    xTaskCreate(taskMQTT, "mqtt", 8192, NULL, 2, &taskHandleMQTT);
     xTaskCreate(taskNotouch, "notouch", 4096, NULL, 1, &taskHandleNotouch);
 }
 
