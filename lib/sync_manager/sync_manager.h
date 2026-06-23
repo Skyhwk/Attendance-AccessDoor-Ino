@@ -1,15 +1,10 @@
 #pragma once
 #include <Arduino.h>
 
-// Forward declarations
-class WifiManager;
-class MQTTManager;
-class ConfigManager;
-
-#define OFFLINE_DATA_FILE "/offline_data.bin"
+#define OFFLINE_DIR "/offline"
+#define OFFLINE_QUEUE_FILE "/offline/queue.txt"
+#define OFFLINE_STATE_FILE "/offline/state.txt"
 #define MAX_OFFLINE_RECORDS 1000
-
-#pragma pack(push, 1)
 
 struct OfflineRecord
 {
@@ -18,20 +13,11 @@ struct OfflineRecord
     char datetime[20];
     char status[32];
     char iddev[16];
-    uint8_t modeDeviceData; // 0=ACCESS_DOOR, 1=ATTENDANCE
-    uint8_t mode;           // MODE_NORMAL, MODE_SCAN, etc
-    bool includeMode;       // Apakah mode perlu dikirim
+    uint8_t modeDeviceData;
+    uint8_t mode;
+    bool includeMode;
     uint32_t sequence;
 };
-
-struct OfflineHeader
-{
-    uint32_t writeIndex;
-    uint32_t readIndex;
-    uint32_t totalRecords;
-};
-
-#pragma pack(pop)
 
 class SyncManager
 {
@@ -39,7 +25,6 @@ public:
     bool begin();
     void loop();
 
-    // Tambah data ke offline queue
     bool addOfflineRecord(const char *rfid,
                           const char *nama,
                           const char *datetime,
@@ -49,24 +34,30 @@ public:
                           uint8_t mode,
                           bool includeMode);
 
-    // Get pending count
     uint32_t getPendingCount();
-
-    // Clear all offline data
     bool clearOfflineData();
 
 private:
     bool initFile();
-    bool readHeader(OfflineHeader &header);
-    bool writeHeader(const OfflineHeader &header);
-    bool readRecord(uint32_t index, OfflineRecord &rec);
-    bool writeRecord(uint32_t index, const OfflineRecord &rec);
+    bool ensureOfflineDir();
+    bool loadState();
+    bool saveState();
+    int countQueueLines();
+    bool appendQueueLine(const OfflineRecord &rec);
+    bool readQueueLineAt(uint32_t index, OfflineRecord &rec);
+    bool dropOldestPendingLine();
+    void compactQueueIfNeeded();
+    static void sanitizeField(const char *src, char *dest, size_t len);
+    static bool parseQueueLine(const char *line, OfflineRecord &rec);
+    static bool formatQueueLine(const OfflineRecord &rec, char *out, size_t outLen);
 
     bool pushNextRecord();
     bool pushRecord(const OfflineRecord &rec);
 
+    uint32_t _readIndex = 0;
+    uint32_t _totalLines = 0;
     unsigned long lastSyncAttempt = 0;
-    const unsigned long syncInterval = 5000; // 5 detik check interval
+    const unsigned long syncInterval = 5000;
     bool _busy = false;
 };
 

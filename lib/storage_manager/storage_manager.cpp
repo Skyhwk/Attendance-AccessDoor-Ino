@@ -266,6 +266,176 @@ bool StorageManager::findByRFIDFlexible(const char *tag, AccessRecord &out)
     return false;
 }
 
+void StorageManager::normalizeRfid(const char *rfid, char *out, size_t outLen)
+{
+    if (out == nullptr || outLen == 0)
+        return;
+
+    out[0] = '\0';
+    if (rfid == nullptr)
+        return;
+
+    strlcpy(out, rfid, outLen);
+    for (char *p = out; *p; p++)
+    {
+        if (*p >= 'A' && *p <= 'Z')
+            *p = (char)(*p - 'A' + 'a');
+    }
+}
+
+bool StorageManager::rfidMatchesFlexible(const char *stored, const char *tag)
+{
+    if (stored == nullptr || tag == nullptr || stored[0] == '\0' || tag[0] == '\0')
+        return false;
+
+    char lower[16];
+    char upper[16];
+    char trimmed[16];
+    const char *candidates[3];
+    int candidateCount = 0;
+
+    strlcpy(lower, tag, sizeof(lower));
+    for (char *p = lower; *p; p++)
+    {
+        if (*p >= 'A' && *p <= 'Z')
+            *p = (char)(*p - 'A' + 'a');
+    }
+
+    strlcpy(upper, lower, sizeof(upper));
+    for (char *p = upper; *p; p++)
+    {
+        if (*p >= 'a' && *p <= 'z')
+            *p = (char)(*p - 'a' + 'A');
+    }
+
+    strlcpy(trimmed, lower, sizeof(trimmed));
+    while (trimmed[0] == '0' && trimmed[1] != '\0')
+        memmove(trimmed, trimmed + 1, strlen(trimmed));
+
+    candidates[candidateCount++] = lower;
+    if (strcmp(upper, lower) != 0)
+        candidates[candidateCount++] = upper;
+    if (strcmp(trimmed, lower) != 0 && strcmp(trimmed, upper) != 0)
+        candidates[candidateCount++] = trimmed;
+
+    for (int i = 0; i < candidateCount; i++)
+    {
+        if (strcmp(stored, candidates[i]) == 0)
+            return true;
+    }
+
+    char storedTrim[16];
+    strlcpy(storedTrim, stored, sizeof(storedTrim));
+    for (char *p = storedTrim; *p; p++)
+    {
+        if (*p >= 'A' && *p <= 'Z')
+            *p = (char)(*p - 'A' + 'a');
+    }
+    while (storedTrim[0] == '0' && storedTrim[1] != '\0')
+        memmove(storedTrim, storedTrim + 1, strlen(storedTrim));
+
+    return strcmp(storedTrim, trimmed) == 0;
+}
+
+bool StorageManager::upsertAccess(const char *rfid, const char *fullName)
+{
+    if (rfid == nullptr || rfid[0] == '\0')
+        return false;
+
+    char rfidNorm[16];
+    normalizeRfid(rfid, rfidNorm, sizeof(rfidNorm));
+
+    if (SD.exists(ACCESS_FILE))
+    {
+        File f = SD.open(ACCESS_FILE, "r+");
+        if (f)
+        {
+            AccessRecord rec;
+            uint32_t idx = 0;
+            while (f.read((uint8_t *)&rec, sizeof(rec)) == sizeof(rec))
+            {
+                if (rfidMatchesFlexible(rec.rfid, rfidNorm))
+                {
+                    safeCopy(rec.rfid, rfidNorm, sizeof(rec.rfid));
+                    safeCopy(rec.full_name, fullName ? fullName : "", sizeof(rec.full_name));
+                    if (rec.employee_id[0] == '\0')
+                        safeCopy(rec.employee_id, rfidNorm, sizeof(rec.employee_id));
+
+                    f.seek((uint32_t)sizeof(AccessRecord) * idx);
+                    bool ok = f.write((uint8_t *)&rec, sizeof(rec)) == sizeof(rec);
+                    f.close();
+                    if (ok)
+                        Serial.println(String("[Storage] Access updated rfid=") + rfidNorm);
+                    return ok;
+                }
+                idx++;
+            }
+            f.close();
+        }
+    }
+
+    AccessRecord rec;
+    memset(&rec, 0, sizeof(rec));
+    safeCopy(rec.rfid, rfidNorm, sizeof(rec.rfid));
+    safeCopy(rec.full_name, fullName ? fullName : "", sizeof(rec.full_name));
+    safeCopy(rec.employee_id, rfidNorm, sizeof(rec.employee_id));
+
+    bool ok = addAccess(rec);
+    if (ok)
+        Serial.println(String("[Storage] Access added rfid=") + rfidNorm);
+    return ok;
+}
+
+bool StorageManager::deleteAccessByRFID(const char *rfid)
+{
+    if (rfid == nullptr || rfid[0] == '\0')
+        return false;
+
+    if (!SD.exists(ACCESS_FILE))
+        return false;
+
+    char rfidNorm[16];
+    normalizeRfid(rfid, rfidNorm, sizeof(rfidNorm));
+
+    File in = SD.open(ACCESS_FILE, FILE_READ);
+    if (!in)
+        return false;
+
+    File out = SD.open("/access.tmp", FILE_WRITE);
+    if (!out)
+    {
+        in.close();
+        return false;
+    }
+
+    AccessRecord rec;
+    bool removed = false;
+    while (in.read((uint8_t *)&rec, sizeof(rec)) == sizeof(rec))
+    {
+        if (rfidMatchesFlexible(rec.rfid, rfidNorm))
+        {
+            removed = true;
+            continue;
+        }
+        out.write((uint8_t *)&rec, sizeof(rec));
+    }
+
+    in.close();
+    out.close();
+
+    if (!removed)
+    {
+        SD.remove("/access.tmp");
+        Serial.println(String("[Storage] Access not found rfid=") + rfidNorm);
+        return false;
+    }
+
+    SD.remove(ACCESS_FILE);
+    SD.rename("/access.tmp", ACCESS_FILE);
+    Serial.println(String("[Storage] Access deleted rfid=") + rfidNorm);
+    return true;
+}
+
 uint32_t StorageManager::countAccess()
 {
     File f = SD.open(ACCESS_FILE, FILE_READ);

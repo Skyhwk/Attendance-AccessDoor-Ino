@@ -26,6 +26,8 @@ private:
     void handleMessage(const char *topic, const byte *payload, unsigned int length);
 
     bool handleCommandJson(const String &topic, const String &message);
+    bool applyAddUserFromData(const String &data);
+    bool applyDeleteUserFromData(const String &data);
     bool syncAccessFromCommand(const String &cmd, const String &data, uint32_t timeoutMs);
     bool fetchAccessPath(const String &cmd, String &outPath);
     bool downloadAccessBin(const String &url, uint32_t timeoutMs);

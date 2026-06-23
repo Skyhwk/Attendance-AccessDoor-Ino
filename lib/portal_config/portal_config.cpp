@@ -263,7 +263,7 @@ static void serverRoutes()
                       redirectTo(request, "/login");
                       return;
                   }
-                  streamDownload(request, "/offline_data.bin", "offline_data.bin"); });
+                  streamDownload(request, "/offline/queue.txt", "offline-queue.txt"); });
 
     server.on("/api/sync/status", HTTP_GET, [](AsyncWebServerRequest *request)
               {

@@ -38,6 +38,8 @@ public:
     bool applyAccessDownload(Stream &stream, int contentLength);
     bool findByRFID(const char *rfid, AccessRecord &out);
     bool findByRFIDFlexible(const char *tag, AccessRecord &out);
+    bool upsertAccess(const char *rfid, const char *fullName);
+    bool deleteAccessByRFID(const char *rfid);
     uint32_t countAccess();
 
     // ===== LOG =====
@@ -49,6 +51,8 @@ public:
 
 private:
     void safeCopy(char *dest, const char *src, size_t len);
+    static void normalizeRfid(const char *rfid, char *out, size_t outLen);
+    static bool rfidMatchesFlexible(const char *stored, const char *tag);
     bool ensureLogDir();
     void pruneOldLogs();
     static void extractDateYmd(const char *datetime, char *out, size_t outLen);

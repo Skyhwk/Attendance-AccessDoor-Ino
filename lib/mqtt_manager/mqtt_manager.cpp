@@ -30,13 +30,39 @@ static String ensureHttpScheme(const String &host)
     return String("http://") + host;
 }
 
-static String syncModeFromCmd(const String &cmd)
+static bool parseUserAccessData(const String &data, String &outRfid, String &outName)
 {
-    if (cmd == "add_user" || cmd == "add_access" || cmd == "adduser")
-        return "add";
-    if (cmd == "delete_user" || cmd == "delete_access" || cmd == "deleteuser")
-        return "delete";
-    return "sync";
+    String trimmed = data;
+    trimmed.trim();
+    if (trimmed.length() == 0)
+        return false;
+
+    int sepIdx = trimmed.indexOf('-');
+    if (sepIdx <= 0)
+        return false;
+
+    outRfid = trimmed.substring(0, sepIdx);
+    outName = trimmed.substring(sepIdx + 1);
+    outRfid.trim();
+    outName.trim();
+    outRfid.toLowerCase();
+
+    return outRfid.length() > 0;
+}
+
+static bool isAddUserCmd(const String &cmd)
+{
+    return cmd == "add_user" || cmd == "add_access" || cmd == "adduser";
+}
+
+static bool isDeleteUserCmd(const String &cmd)
+{
+    return cmd == "delete_user" || cmd == "delete_access" || cmd == "deleteuser";
+}
+
+static bool isSyncAccessCmd(const String &cmd)
+{
+    return cmd == "sync_access" || cmd == "sync_user" || cmd == "sync_users" || cmd == "syncuser";
 }
 
 void MQTTManager::begin()
@@ -247,12 +273,14 @@ bool MQTTManager::handleCommandJson(const String &topic, const String &message)
 
     Serial.println("[MQTT] Command cmd=" + cmd);
 
-    if (cmd == "sync_access" || cmd == "sync_user" || cmd == "sync_users" || cmd == "syncuser" ||
-        cmd == "add_user" || cmd == "delete_user" || cmd == "add_access" || cmd == "delete_access" ||
-        cmd == "adduser" || cmd == "deleteuser")
-    {
+    if (isAddUserCmd(cmd))
+        return applyAddUserFromData(data);
+
+    if (isDeleteUserCmd(cmd))
+        return applyDeleteUserFromData(data);
+
+    if (isSyncAccessCmd(cmd))
         return syncAccessFromCommand(cmd, data, 15000);
-    }
 
     if (cmd == "change_mode")
     {
@@ -361,6 +389,70 @@ bool MQTTManager::handleCommandJson(const String &topic, const String &message)
     }
 
     return false;
+}
+
+bool MQTTManager::applyAddUserFromData(const String &data)
+{
+    String rfid;
+    String nama;
+    if (!parseUserAccessData(data, rfid, nama))
+    {
+        Serial.println("[MQTT] add_user invalid data=" + data);
+        return false;
+    }
+
+    Serial.println("[MQTT] add_user rfid=" + rfid + " nama=" + nama);
+
+    bool ok = Storage.upsertAccess(rfid.c_str(), nama.c_str());
+    if (ok)
+    {
+        Buzzer.granted();
+        LCD.showTemp(nama, "User Added", 2000);
+    }
+    else
+    {
+        Buzzer.reject();
+        Serial.println("[MQTT] add_user FAILED");
+    }
+
+    return ok;
+}
+
+bool MQTTManager::applyDeleteUserFromData(const String &data)
+{
+    String rfid;
+    String nama;
+    if (!parseUserAccessData(data, rfid, nama))
+    {
+        String trimmed = data;
+        trimmed.trim();
+        trimmed.toLowerCase();
+        int sepIdx = trimmed.indexOf('-');
+        rfid = (sepIdx > 0) ? trimmed.substring(0, sepIdx) : trimmed;
+        rfid.trim();
+    }
+
+    if (rfid.length() == 0)
+    {
+        Serial.println("[MQTT] delete_user invalid data=" + data);
+        return false;
+    }
+
+    Serial.println("[MQTT] delete_user rfid=" + rfid);
+
+    bool ok = Storage.deleteAccessByRFID(rfid.c_str());
+    if (ok)
+    {
+        Buzzer.found();
+        LCD.showTemp(rfid, "User Deleted", 2000);
+    }
+    else
+    {
+        Buzzer.reject();
+        Serial.println("[MQTT] delete_user FAILED or not found");
+    }
+
+    return ok;
 }
 
 String MQTTManager::resolveDownloadUrl(const String &path) const
