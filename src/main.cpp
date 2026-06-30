@@ -121,6 +121,7 @@ void taskMQTT(void *pv)
             Sync.loop(); // Auto-sync offline data saat online dan idle
             Storage.loopLogMaintenance();
             RFID.processDeferred();
+            Door.update();
         }
 
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -160,17 +161,47 @@ void taskBuzzer(void *pv)
 
 void taskNotouch(void *pv)
 {
-    for (;;)
+    const uint32_t sampleMs = 20;
+    const uint8_t pressSamples = 5;   // ~100 ms LOW stabil sebelum trigger
+    const uint8_t releaseSamples = 3; // ~60 ms HIGH stabil sebelum siap lagi
+
+    uint8_t lowStreak = 0;
+    uint8_t highStreak = 0;
+    bool armed = true;
+
+    while (true)
     {
         if (deviceState == STATE_RUN)
         {
             if (digitalRead(PIN_TOUCH_CONFIG) == LOW)
             {
-                Door.noTouchOpen();
+                lowStreak++;
+                highStreak = 0;
+
+                if (armed && lowStreak >= pressSamples)
+                {
+                    armed = false;
+                    lowStreak = 0;
+                    Door.noTouchOpen();
+                }
+            }
+            else
+            {
+                highStreak++;
+                lowStreak = 0;
+
+                if (!armed && highStreak >= releaseSamples)
+                    armed = true;
             }
         }
+        else
+        {
+            lowStreak = 0;
+            highStreak = 0;
+            armed = true;
+        }
 
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(sampleMs));
     }
 }
 
