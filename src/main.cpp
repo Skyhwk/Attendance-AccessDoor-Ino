@@ -129,55 +129,55 @@ void taskBuzzer(void *pv) {
   }
 }
 
-// void taskNotouch(void *pv) {
-//   const uint32_t sampleMs = 20;
-//   const uint8_t pressSamples = 5;   // ~100 ms LOW stabil sebelum trigger
-//   const uint8_t releaseSamples = 3; // ~60 ms HIGH stabil sebelum siap lagi
+void taskNotouch(void *pv) {
+  const uint32_t sampleMs = 20;
+  const uint8_t pressSamples = 5;   // ~100 ms LOW stabil sebelum trigger
+  const uint8_t releaseSamples = 3; // ~60 ms HIGH stabil sebelum siap lagi
 
-//   uint8_t lowStreak = 0;
-//   uint8_t highStreak = 0;
-//   bool armed = true;
+  uint8_t lowStreak = 0;
+  uint8_t highStreak = 0;
+  bool armed = true;
 
-//   while (true) {
-//     if (deviceState == STATE_RUN) {
-//       if (digitalRead(PIN_TOUCH_CONFIG) == LOW) {
-//         lowStreak++;
-//         highStreak = 0;
-
-//         if (armed && lowStreak >= pressSamples) {
-//           armed = false;
-//           lowStreak = 0;
-//           Door.noTouchOpen();
-//         }
-//       } else {
-//         highStreak++;
-//         lowStreak = 0;
-
-//         if (!armed && highStreak >= releaseSamples)
-//           armed = true;
-//       }
-//     } else {
-//       lowStreak = 0;
-//       highStreak = 0;
-//       armed = true;
-//     }
-
-//     vTaskDelay(pdMS_TO_TICKS(sampleMs));
-//   }
-// }
-
-void taskNotouch(void *parameter) {
   while (true) {
     if (deviceState == STATE_RUN) {
-      state_notouch = digitalRead(PIN_TOUCH_CONFIG);
-      if (state_notouch == 0) {
-        Buzzer.found();
-        Door.noTouchOpen();
+      if (digitalRead(PIN_TOUCH_CONFIG) == LOW) {
+        lowStreak++;
+        highStreak = 0;
+
+        if (armed && lowStreak >= pressSamples) {
+          armed = false;
+          lowStreak = 0;
+          Door.noTouchOpen();
+        }
+      } else {
+        highStreak++;
+        lowStreak = 0;
+
+        if (!armed && highStreak >= releaseSamples)
+          armed = true;
       }
+    } else {
+      lowStreak = 0;
+      highStreak = 0;
+      armed = true;
     }
-    vTaskDelay(pdMS_TO_TICKS(100));
+
+    vTaskDelay(pdMS_TO_TICKS(sampleMs));
   }
 }
+
+// void taskNotouch(void *parameter) {
+//   while (true) {
+//     if (deviceState == STATE_RUN) {
+//       state_notouch = digitalRead(PIN_TOUCH_CONFIG);
+//       if (state_notouch == 0) {
+//         Buzzer.found();
+//         Door.noTouchOpen();
+//       }
+//     }
+//     vTaskDelay(pdMS_TO_TICKS(100));
+//   }
+// }
 
 // ================= INIT FUNCTIONS =================
 
