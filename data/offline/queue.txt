@@ -1,0 +1,1 @@
+# rfid|nama|datetime|status|iddev|modeDeviceData|mode|includeMode
