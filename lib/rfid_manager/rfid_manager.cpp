@@ -28,6 +28,9 @@ struct DeferredRfidWork
 };
 
 static DeferredRfidWork g_deferred;
+// Mutex melindungi g_deferred dari race condition antara taskRFID dan taskMQTT
+// yang berjalan parallel di ESP32 dual-core tanpa sinkronisasi
+static SemaphoreHandle_t g_deferredMutex = nullptr;
 
 static bool isEmptyStr(const char *s);
 static void safeCopy(char *dest, const String &src, size_t len);
@@ -141,6 +144,8 @@ static void safeCopyCStr(char *dest, const char *src, size_t len)
 
 void RFIDManager::begin(int rxPin)
 {
+    if (g_deferredMutex == nullptr)
+        g_deferredMutex = xSemaphoreCreateMutex();
     rdm6300.begin(rxPin);
     rdm6300.set_tag_timeout(300);
 }
@@ -178,6 +183,15 @@ static void deferBackgroundWork(const DeviceConfig &cfg,
                                 const String &status,
                                 bool includeMode)
 {
+    if (g_deferredMutex == nullptr)
+        return;
+
+    if (xSemaphoreTake(g_deferredMutex, pdMS_TO_TICKS(100)) != pdTRUE)
+    {
+        Serial.println("[RFID] deferBackgroundWork: mutex timeout, data discarded");
+        return;
+    }
+
     safeCopy(g_deferred.rfid, tag, sizeof(g_deferred.rfid));
     safeCopy(g_deferred.nama, nama, sizeof(g_deferred.nama));
     safeCopy(g_deferred.datetime, datetime, sizeof(g_deferred.datetime));
@@ -187,6 +201,8 @@ static void deferBackgroundWork(const DeviceConfig &cfg,
     g_deferred.mode = (uint8_t)cfg.mode;
     g_deferred.includeMode = includeMode;
     g_deferred.pending = true;
+
+    xSemaphoreGive(g_deferredMutex);
 }
 
 void RFIDManager::processDeferred()
@@ -194,8 +210,16 @@ void RFIDManager::processDeferred()
     if (!g_deferred.pending)
         return;
 
+    if (g_deferredMutex == nullptr)
+        return;
+
+    if (xSemaphoreTake(g_deferredMutex, pdMS_TO_TICKS(50)) != pdTRUE)
+        return;
+
     DeferredRfidWork work = g_deferred;
     g_deferred.pending = false;
+
+    xSemaphoreGive(g_deferredMutex);
 
     auto &cfg = Config.get();
     publishRfidLogWithOfflineQueue(cfg,

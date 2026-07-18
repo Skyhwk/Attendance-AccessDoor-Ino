@@ -98,7 +98,7 @@ void taskMQTT(void *pv) {
       Sync.loop(); // Auto-sync offline data saat online dan idle
       Storage.loopLogMaintenance();
       RFID.processDeferred();
-      Door.update();
+      // Door.update() dipindah ke taskBuzzer agar tidak terblokir oleh operasi network
     }
 
     vTaskDelay(pdMS_TO_TICKS(10));
@@ -125,6 +125,7 @@ void taskLCD(void *pv) {
 void taskBuzzer(void *pv) {
   for (;;) {
     Buzzer.update();
+    Door.update(); // Dipindah dari taskMQTT agar tidak terblokir operasi network
     vTaskDelay(pdMS_TO_TICKS(5));
   }
 }

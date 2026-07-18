@@ -141,18 +141,6 @@ bool MQTTManager::networkReady() const
     return Wifi.isConnected();
 }
 
-bool MQTTManager::brokerReachable(uint32_t timeoutMs)
-{
-    auto &cfg = Config.get();
-    if (isEmptyStr(cfg.host) || cfg.port <= 0)
-        return false;
-
-    WiFiClient probe;
-    probe.setTimeout(timeoutMs / 1000);
-    bool ok = probe.connect(cfg.host, (uint16_t)cfg.port);
-    probe.stop();
-    return ok;
-}
 
 void MQTTManager::onWifiConnected()
 {
@@ -170,7 +158,6 @@ bool MQTTManager::connectIfNeeded()
 
     if (!wifiConfigValid())
     {
-        // Serial.println("[MQTT] Skip connect: ssid/password empty");
         if (client.connected())
             client.disconnect();
         return false;
@@ -178,7 +165,6 @@ bool MQTTManager::connectIfNeeded()
 
     if (!networkReady())
     {
-        // Serial.println("[MQTT] Skip connect: WiFi not connected");
         if (client.connected())
             client.disconnect();
         return false;
@@ -192,11 +178,10 @@ bool MQTTManager::connectIfNeeded()
         return false;
     lastConnectAttemptMs = now;
 
-    if (!brokerReachable(1500))
-    {
-        Serial.println("[MQTT] Broker not reachable");
-        return false;
-    }
+    // brokerReachable() dihapus karena merupakan blocking TCP call yang dapat
+    // membekukan taskMQTT selama 5-20 detik saat offline, mencegah Door.update()
+    // berjalan dan menyebabkan relay tidak merespon sentuhan RFID / noTouch.
+    // PubSubClient.connect() sudah menangani kegagalan connect dengan baik.
 
     auto &cfg = Config.get();
     String clientId = String(cfg.iddev);

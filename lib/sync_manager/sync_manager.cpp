@@ -5,6 +5,9 @@
 #include <string.h>
 #include "config_manager.h"
 
+// Forward declarations untuk menghindari transitive dependency WiFi.h
+// saat PlatformIO mengkompilasi library ini secara terisolasi.
+// Signatures harus tetap sinkron dengan wifi_manager.h dan mqtt_manager.h.
 class WifiManager
 {
 public:

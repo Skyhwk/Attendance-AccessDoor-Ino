@@ -17,8 +17,6 @@ public:
 private:
     bool wifiConfigValid() const;
     bool networkReady() const;
-    bool brokerReachable(uint32_t timeoutMs);
-
     bool connectIfNeeded();
     void onWifiConnected();
 
