@@ -93,7 +93,7 @@ void ConfigManager::setDefaultIfInvalid()
 
     // MQTT topics boleh kosong
     if (config.topic_subscribe[0] == '\0')
-        strcpy(config.topic_subscribe, "/intilab/iot/multidevices");
+        strcpy(config.topic_subscribe, "/intilab/iot/multidevice");
     if (config.topic_publish[0] == '\0')
         strcpy(config.topic_publish, "/intilab/iot/log-access");
 
