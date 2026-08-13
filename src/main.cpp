@@ -19,6 +19,7 @@
 #define PIN_RELAY 25
 #define PIN_BUZZER 26
 #define PIN_TOUCH_CONFIG 17
+#define PIN_CONFIG 0
 #define PIN_RFID_RX 4
 
 // ================= DEVICE STATE =================
@@ -231,20 +232,20 @@ void setup() {
     ESP.restart();
   }
 
-  Portal.beginApOnHold(PIN_TOUCH_CONFIG, 10000);
+  if (!initConfig()) {
+    deviceState = STATE_CONFIG;
+    LCD.setInfo1("NOT CONFIGURED");
+    LCD.setInfo2("Use Portal Mode");
+    return;
+  }
+
+  Portal.beginApOnHold(PIN_CONFIG, 5000);
 
   if (Portal.isActive()) {
     deviceState = STATE_CONFIG;
     LCD.setInfo1("CONFIG MODE");
     LCD.setInfo2("Connect to WiFi");
     LCD.setStaticIp(WiFi.softAPIP().toString());
-    return;
-  }
-
-  if (!initConfig()) {
-    deviceState = STATE_CONFIG;
-    LCD.setInfo1("NOT CONFIGURED");
-    LCD.setInfo2("Use Portal Mode");
     return;
   }
 

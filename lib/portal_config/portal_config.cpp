@@ -328,9 +328,6 @@ bool PortalConfig::isApMode() const { return g_apMode; }
 
 bool PortalConfig::beginApOnHold(uint8_t buttonPin, uint32_t holdMs)
 {
-    // TODO: Masih bug di sini, jika tombol ditekan, maka AP akan terbuka, tetapi jika tombol dilepas, maka AP akan tertutup
-    pinMode(buttonPin, INPUT_PULLUP);
-
     if (digitalRead(buttonPin) == LOW)
         Serial.println("[Portal] Hold detected, waiting...");
 

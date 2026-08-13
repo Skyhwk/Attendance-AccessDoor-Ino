@@ -366,16 +366,16 @@ Sync.clearOfflineData();
 
 ## ✅ Testing Checklist
 
-- [ ] Device boot with empty `/offline_data.bin`
-- [ ] RFID scan saat online → langsung terkirim
-- [ ] RFID scan saat offline → masuk queue
-- [ ] Disconnect WiFi → scan beberapa kali → check pending count
-- [ ] Reconnect WiFi → verify auto-sync
-- [ ] Fill queue hingga penuh (1000) → verify overflow handling
-- [ ] Check portal API `/api/sync/status`
-- [ ] Download `/download/offline` via portal
-- [ ] Clear queue via `/api/sync/clear`
-- [ ] Monitor serial output untuk sync messages
+- [v] Device boot with empty `/offline_data.bin`
+- [v] RFID scan saat online → langsung terkirim
+- [v] RFID scan saat offline → masuk queue
+- [v] Disconnect WiFi → scan beberapa kali → check pending count
+- [v] Reconnect WiFi → verify auto-sync
+- [v] Fill queue hingga penuh (1000) → verify overflow handling
+- [v] Check portal API `/api/sync/status`
+- [v] Download `/download/offline` via portal
+- [v] Clear queue via `/api/sync/clear`
+- [v] Monitor serial output untuk sync messages
 
 ---
 
